@@ -1,4 +1,5 @@
 from preparations import *
+import math
 
 
 class Object:
@@ -86,8 +87,9 @@ class Ant(Object):
             if block.is_accessible() and not isinstance(block.obj, Ant):
                 accessible_neighbour_blocks.append(block)
             elif isinstance(block.obj, Ant) and block.obj.camp != self.camp:
-                block.obj.got_killed()
-                self.got_killed()
+                # block.obj.got_killed()
+                # self.got_killed()
+                direction = 0
                 return
 
         if direction == 0 and len(accessible_neighbour_blocks):
@@ -133,13 +135,25 @@ class Food(Object):
     next_id = 1
     tag = "食物"
 
+    @staticmethod
+    def get_sin_number_generator():
+        pi = 3.1415926535
+        a = 0.05
+        omega = 0.04*pi
+        phi = random()*2*pi
+        b = 1
+        x = 0
+        while True:
+            yield a*math.sin(omega*x+phi)+b
+            x += 1
+
     def __init__(self, x, y):
         Object.__init__(self, x, y)
         Food.foods.append(self)
         self.id = Food.next_id
         Food.next_id += 1
-        self.quality = FOOD_ORIGIN_QUALITY
         self.declare_to_enter()
+        self.sin_number_generator = Food.get_sin_number_generator()
 
     @staticmethod
     def get_rgb():
@@ -152,18 +166,12 @@ class Food(Object):
             Food(x, y)
 
     def disappear(self):
-        Map.block(self.get_pos()).odor *= -1
         self.declare_to_leave()
         Food.foods.remove(self)
         Object.objects.remove(self)
 
     def act(self):
-        quality = self.quality * FOOD_TO_ODOR_FACTOR
-        block = Map.block(self.get_pos())
-        block.odor += quality
-        self.quality -= quality
-        if self.quality < 50:
-            self.disappear()
+        Map.block(self.get_pos()).odor = FOOD_ORIGIN_QUALITY * next(self.sin_number_generator)
 
 
 class Block:
@@ -196,16 +204,17 @@ class Block:
         return self.obj is None
 
     def odor_out(self):
-        self.odor *= 0.99
-        self.odor //= 1
-        self.odor = max(0, self.odor)
-        n = len(self.accessible_neighbours)
-        if n > 0:
-            offset = (random()*2-1)*ODOR_FLOAT_FACTOR_MAX_OFFSET
-            odor_to_float_per_neighbour = self.odor*(ODOR_FLOAT_FACTOR+offset)
-            for block in self.accessible_neighbours:
-                block.odor_inc += odor_to_float_per_neighbour
-            self.odor_inc -= n*odor_to_float_per_neighbour
+        self.odor *= 0.9
+        if self.odor < 1:
+            self.odor = 0
+        max_float_factor = 0.9
+        neighbour_blocks = list(Map.block(pos) for pos in Map.get_neighbours_of_position(self.get_pos()))
+        accessible_neighbour_blocks = list(block for block in neighbour_blocks if block.is_accessible())
+        accessible_neighbour_blocks.sort(key=lambda block: block.odor, reverse=True)
+        if len(accessible_neighbour_blocks):
+            block = accessible_neighbour_blocks[0]
+            if self.odor < block.odor*max_float_factor:
+                self.odor_inc += (block.odor*max_float_factor - self.odor) * 0.7
 
     def odor_in(self):
         self.odor += self.odor_inc
@@ -219,16 +228,22 @@ class Block:
                                      BLOCK_SIZE, BLOCK_SIZE), edge_width)
 
         if self.is_empty():
-            edge_width = max(1, edge_width)
             odor = self.odor
-            r = 0  # min(max(odor-100, 0), 100)*64//100
-            g = max(0, min(odor, 100))*255//200
+            rect_size = self.odor*BLOCK_SIZE//FOOD_ORIGIN_QUALITY  # f(FOOD_ORIGIN_QUALITY) = BLOCK_SIZE, f(0)=0
+            rect_size = min(BLOCK_SIZE - 2, rect_size)
+            edge_width = (BLOCK_SIZE-rect_size)//2
+            r = 0
+            g = min(1, self.odor/FOOD_ORIGIN_QUALITY)*192//1
             b = r
             rect = pygame.Rect((MAP_BLOCK_X+self.x)*BLOCK_SIZE+edge_width,
                                (MAP_BLOCK_Y+self.y)*BLOCK_SIZE+edge_width,
                                BLOCK_SIZE-2*edge_width,
                                BLOCK_SIZE-2*edge_width)
-            pygame.draw.rect(DISPLAYSURFACE, (r, g, b), rect, 0)
+            try:
+                pygame.draw.rect(DISPLAYSURFACE, (r, g, b), rect, 0)
+            except TypeError:
+                print("g =", g)
+                exit(1)
 
 
 class Map:
