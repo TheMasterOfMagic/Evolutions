@@ -9,9 +9,9 @@ pygame.time.set_timer(TIMER, TIMER_ELAPSE)
 pygame.time.set_timer(RENDER_TIMER, 40)
 
 
-Camp((255, 0, 0), 1)
-Camp((255, 255, 0), 1)
-Camp((128, 0, 255), 1)
+Camp((255, 0, 0), 1, 0)
+Camp((255, 255, 0), 1, 0)
+Camp((128, 0, 255), 1, 0)
 "——gen obstacles——"
 if 1:
     Map.gen_obstacles()

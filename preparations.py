@@ -9,11 +9,12 @@ class GameOverException(Exception):
 class Camp:
     camps = []
 
-    def __init__(self, rgb, ant_number):
+    def __init__(self, rgb, ant_number, food_number):
         self.id = len(Camp.camps)
         Camp.camps.append(self)
         self.rgb = rgb
         self.ant_number = ant_number
+        self.food_number = food_number
         Bar(self)
 
     def get_rgb(self):

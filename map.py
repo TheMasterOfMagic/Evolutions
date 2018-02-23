@@ -68,7 +68,10 @@ class Ant(Object):
     def got(self, food):
         x, y = food.get_pos()
         food.disappear()
-        Ant(x, y, self.camp)
+        self.camp.food_number += 1
+        if self.camp.food_number == 5:
+            Ant(x, y, self.camp)
+            self.camp.food_number = 0
 
     def act(self):
         def log(*args, **kwargs):
@@ -90,7 +93,6 @@ class Ant(Object):
                 # block.obj.got_killed()
                 # self.got_killed()
                 direction = 0
-                return
 
         if direction == 0 and len(accessible_neighbour_blocks):
             shuffle(accessible_neighbour_blocks)
@@ -207,7 +209,7 @@ class Block:
         self.odor *= 0.9
         if self.odor < 1:
             self.odor = 0
-        max_float_factor = 0.9
+        max_float_factor = 0.95
         neighbour_blocks = list(Map.block(pos) for pos in Map.get_neighbours_of_position(self.get_pos()))
         accessible_neighbour_blocks = list(block for block in neighbour_blocks if block.is_accessible())
         accessible_neighbour_blocks.sort(key=lambda block: block.odor, reverse=True)
