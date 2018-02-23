@@ -9,16 +9,19 @@ class Object:
     def __init__(self, x, y):
         self.x, self.y = x, y
         Object.objects.append(self)
-        self.declare_to_enter()
 
     def get_pos(self):
         return self.x, self.y
 
     def declare_to_enter(self):
+        # print("%s即将进入地格%s" % (self.full_name(), self.get_pos()))
         Map.block((self.x, self.y)).got_obj(self)
+        # print("%s已经进入地格%s" % (self.full_name(), self.get_pos()))
 
     def declare_to_leave(self):
+        # print("%s即将离开地格%s" % (self.full_name(), self.get_pos()))
         Map.block((self.x, self.y)).lost_obj(self)
+        # print("%s已经离开地格%s" % (self.full_name(), self.get_pos()))
 
     def act(self):
         pass
@@ -37,6 +40,7 @@ class Obstacle(Object):
         Obstacle.objects.append(self)
         self.id = Obstacle.next_id
         Obstacle.next_id += 1
+        self.declare_to_enter()
 
     @staticmethod
     def get_rgb():
@@ -54,46 +58,47 @@ class Ant(Object):
         self.id = Ant.next_id
         Ant.next_id += 1
         self.camp = camp
-        self.target = None
+        self.camp.ant_number += 1
+        self.declare_to_enter()
 
     def get_rgb(self):
         return self.camp.get_rgb()
 
     def got(self, food):
         x, y = food.get_pos()
-        food.gotten_by(self)
-        self.camp.food_number += 1
+        food.disappear()
         Ant(x, y, self.camp)
-        self.target = None
 
     def act(self):
         def log(*args, **kwargs):
             if debug:
                 print(*args, **kwargs)
         debug = 0
+        block = Map.block(self.get_pos())
+        block.odor = max(0, block.odor-50)
+
         self.declare_to_leave()
-        if self.target is not None and not isinstance(Map.block(self.target.get_pos()).obj, Food):
-            self.target = None
-        if self.target is None:
-            direction, distance = 0, MAX_SEARCHING_DISTANCE
-        else:
-            direction, distance = Map.get_p2p_direction_and_distance(self.get_pos(), self.target.get_pos())
-        log("尝试获取食物")
-        shuffle(Food.foods)
-        for f in Food.foods:
-            _direction, _distance = Map.get_p2p_direction_and_distance(self.get_pos(), f.get_pos(), distance)
-            if distance > _distance or \
-                    distance == _distance and self.target is None:
-                self.target = f
-                direction = _direction
-                distance = _distance
-        if self.target is None:
-            log("获取失败")
-        else:
-            log("最近的食物位于", self.target.get_pos(), "距离", distance, "格 , 当前前进方向 :", direction)
-        if distance == 1:
-            self.got(self.target)
-            direction = 5
+        direction = 0
+        neighbour_positions = Map.get_neighbours_of_position(self.get_pos())
+        neighbour_blocks = list(Map.block(pos) for pos in neighbour_positions)
+        accessible_neighbour_blocks = []
+        for block in neighbour_blocks:
+            if block.is_accessible() and not isinstance(block.obj, Ant):
+                accessible_neighbour_blocks.append(block)
+            elif isinstance(block.obj, Ant) and block.obj.camp != self.camp:
+                block.obj.got_killed()
+                self.got_killed()
+                return
+
+        if direction == 0 and len(accessible_neighbour_blocks):
+            shuffle(accessible_neighbour_blocks)
+            accessible_neighbour_blocks.sort(key=lambda block: block.odor, reverse=True)
+            direction = Map.get_direction_to_neighbour(self.get_pos(), accessible_neighbour_blocks[0].get_pos())
+
+            obj = Map.block(Map.get_position_after_moving_towards_direction(self.get_pos(), direction)).obj
+            if isinstance(obj, Food):
+                direction = 5
+                self.got(obj)
 
         if direction == 0:
             log("无选中方向，开始在可行方向中随机选取")
@@ -108,9 +113,16 @@ class Ant(Object):
             direction = choice(accessible_directions) if len(accessible_directions) else 5
             log("随机选取方向 :", direction)
         self.move_towards(direction)
+
         log(self.full_name(), "准备进入", (self.x, self.y))
         self.declare_to_enter()
         log(self.full_name(), "已经进入", (self.x, self.y))
+
+    def got_killed(self):
+        self.camp.ant_number -= 1
+        self.declare_to_leave()
+        Ant.ants.remove(self)
+        Object.objects.remove(self)
 
     def move_towards(self, direction):
         self.x, self.y = Map.get_position_after_moving_towards_direction((self.x, self.y), direction)
@@ -126,6 +138,8 @@ class Food(Object):
         Food.foods.append(self)
         self.id = Food.next_id
         Food.next_id += 1
+        self.quality = FOOD_ORIGIN_QUALITY
+        self.declare_to_enter()
 
     @staticmethod
     def get_rgb():
@@ -137,16 +151,31 @@ class Food(Object):
             x, y = Map.get_random_empty_positions(1)[0]
             Food(x, y)
 
-    def gotten_by(self, ant: Ant):
+    def disappear(self):
+        Map.block(self.get_pos()).odor *= -1
         self.declare_to_leave()
         Food.foods.remove(self)
         Object.objects.remove(self)
+
+    def act(self):
+        quality = self.quality * FOOD_TO_ODOR_FACTOR
+        block = Map.block(self.get_pos())
+        block.odor += quality
+        self.quality -= quality
+        if self.quality < 50:
+            self.disappear()
 
 
 class Block:
     def __init__(self, x, y, obj=None):
         self.x, self.y = x, y
         self.obj = obj
+        self.odor = 0
+        self.odor_inc = 0
+        self.accessible_neighbours = []
+
+    def get_pos(self):
+        return self.x, self.y
 
     def got_obj(self, obj: Object):
         self.obj = obj
@@ -166,12 +195,40 @@ class Block:
     def is_empty(self):
         return self.obj is None
 
+    def odor_out(self):
+        self.odor *= 0.99
+        self.odor //= 1
+        self.odor = max(0, self.odor)
+        n = len(self.accessible_neighbours)
+        if n > 0:
+            offset = (random()*2-1)*ODOR_FLOAT_FACTOR_MAX_OFFSET
+            odor_to_float_per_neighbour = self.odor*(ODOR_FLOAT_FACTOR+offset)
+            for block in self.accessible_neighbours:
+                block.odor_inc += odor_to_float_per_neighbour
+            self.odor_inc -= n*odor_to_float_per_neighbour
+
+    def odor_in(self):
+        self.odor += self.odor_inc
+        self.odor_inc = 0
+
     def render(self):
         edge_width = 0 if self.obj is not None else BLOCK_EDGE_WIDTH
         rgb = BLOCK_EDGE_RGB if self.obj is None else self.obj.get_rgb()
         pygame.draw.rect(DISPLAYSURFACE, rgb,
                          pygame.Rect((MAP_BLOCK_X+self.x)*BLOCK_SIZE, (MAP_BLOCK_Y+self.y)*BLOCK_SIZE,
                                      BLOCK_SIZE, BLOCK_SIZE), edge_width)
+
+        if self.is_empty():
+            edge_width = max(1, edge_width)
+            odor = self.odor
+            r = 0  # min(max(odor-100, 0), 100)*64//100
+            g = max(0, min(odor, 100))*255//200
+            b = r
+            rect = pygame.Rect((MAP_BLOCK_X+self.x)*BLOCK_SIZE+edge_width,
+                               (MAP_BLOCK_Y+self.y)*BLOCK_SIZE+edge_width,
+                               BLOCK_SIZE-2*edge_width,
+                               BLOCK_SIZE-2*edge_width)
+            pygame.draw.rect(DISPLAYSURFACE, (r, g, b), rect, 0)
 
 
 class Map:
@@ -195,6 +252,14 @@ class Map:
                 Map.set_position_accessible((x, y), True)
 
     @staticmethod
+    def calc_accessible_neighbours():
+        for pos in Map.__accessible_positions:
+            neighbours = Map.get_neighbours_of_position(pos)
+            accessible_neighbours = list(neighbour for neighbour in neighbours
+                                         if Map.block(neighbour).is_accessible())
+            Map.block(pos).accessible_neighbours = list(Map.block(neighbour) for neighbour in accessible_neighbours)
+
+    @staticmethod
     def get_random_empty_positions(n=1):
         try:
             return sample(Map.__empty_positions, n)
@@ -205,6 +270,16 @@ class Map:
     def block(pos: tuple([int, int])) -> Block:
         x, y = pos
         return Map.__blocks[x][y]
+
+    @staticmethod
+    def block_give_odor():
+        for pos in Map.__accessible_positions:
+            Map.block(pos).odor_out()
+
+    @staticmethod
+    def block_receive_odor():
+        for pos in Map.__accessible_positions:
+            Map.block(pos).odor_in()
 
     @staticmethod
     def set_position_empty(pos: tuple([int, int]), empty: bool):
@@ -292,7 +367,7 @@ class Map:
         return x, y
 
     @staticmethod
-    def get_p2p_direction_and_distance(pos1, pos2, max_searching_distance=MAX_SEARCHING_DISTANCE):
+    def get_p2p_direction_and_distance(pos1, pos2, max_searching_distance=INFINITE_DISTANCE):
         if pos1 == pos2:
             return 5, 0
         start, end = pos1, pos2

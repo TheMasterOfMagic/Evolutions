@@ -9,13 +9,14 @@ pygame.time.set_timer(TIMER, TIMER_ELAPSE)
 pygame.time.set_timer(RENDER_TIMER, 40)
 
 
-Camp((255, 0, 0), 0, 1)
-Camp((255, 255, 0), 0, 1)
-Camp((128, 0, 255), 0, 1)
+Camp((255, 0, 0), 2)
+Camp((255, 255, 0), 2)
+Camp((128, 0, 255), 2)
 "——gen obstacles——"
 if 1:
     Map.gen_obstacles()
 
+Map.calc_accessible_neighbours()
 
 "——gen ants——"
 if 1:
@@ -32,7 +33,11 @@ while True:
                 "——gen food——"
                 if 1:
                     Food.gen_food()
+                "——odors float——"
+                Map.block_give_odor()
+                Map.block_receive_odor()
                 "——objects' action——"
+                shuffle(Object.objects)
                 for obj in Object.objects:
                     obj.act()
             except GameOverException:

@@ -9,19 +9,18 @@ class GameOverException(Exception):
 class Camp:
     camps = []
 
-    def __init__(self, rgb, food_number, ant_number):
+    def __init__(self, rgb, ant_number):
         self.id = len(Camp.camps)
         Camp.camps.append(self)
         self.rgb = rgb
-        self.food_number = food_number
         self.ant_number = ant_number
         Bar(self)
 
     def get_rgb(self):
         return self.rgb
 
-    def get_food_number(self):
-        return self.food_number
+    def get_ant_number(self):
+        return self.ant_number
 
 
 class Bar:
@@ -38,7 +37,7 @@ class Bar:
         self.w = BAR_BLOCK_WIDTH
         self.unit_h = 1/5
         self.camp = camp
-        self.data = camp.get_food_number
+        self.data = camp.get_ant_number
 
     def get_rgb(self):
         return self.camp.get_rgb()
@@ -65,26 +64,32 @@ def get_random_rgb(s=2*255):
 
 TIMER_ELAPSE = 50
 # ================
-MAP_WIDTH = 20
+MAP_WIDTH = 30
 MAP_HEIGHT = 20
-OBSTACLE_FACTOR = 0.1
+OBSTACLE_FACTOR = 0.2
 OBSTACLE_TYPE = "salt"
-FOOD_NUMBER = 3
+FOOD_NUMBER = 10
 REACHING_FOOD_CORRECTION_FACTOR = 10000
 INFINITE_DISTANCE = MAP_WIDTH + MAP_HEIGHT
 MAX_SEARCHING_DISTANCE = 5
+
+ODOR_FLOAT_FACTOR = 0.25
+ODOR_FLOAT_FACTOR_MAX_OFFSET = 0.0
+
+FOOD_ORIGIN_QUALITY = 5000
+FOOD_TO_ODOR_FACTOR = 0.1
 # ================
-BLOCK_SIZE = int(600/max(1.5*MAP_WIDTH, MAP_HEIGHT))
-BLOCK_EDGE_WIDTH = 1
-BLOCK_EDGE_RGB = 0, 255, 255
-FOOD_RGB = 0, 255, 0
-MAP_BLOCK_X = 4
+BLOCK_EDGE_WIDTH = -1
+BLOCK_EDGE_RGB = get_random_rgb()
+FOOD_RGB = 64, 255, 64
+MAP_BLOCK_X = 5
 MAP_BLOCK_Y = 1
-SCREEN_BLOCK_WIDTH = MAP_WIDTH+5
-SCREEN_BLOCK_HEIGHT = MAP_HEIGHT+2
+SCREEN_BLOCK_WIDTH = MAP_WIDTH+MAP_BLOCK_X+1
+SCREEN_BLOCK_HEIGHT = MAP_HEIGHT+MAP_BLOCK_Y+1
 BAR_BLOCK_X = 1
 BAR_BLOCK_Y = MAP_BLOCK_Y+MAP_HEIGHT
 BAR_BLOCK_WIDTH = 1
+BLOCK_SIZE = int(1500/max(1.5*SCREEN_BLOCK_WIDTH, SCREEN_BLOCK_HEIGHT))
 
 pygame.init()
 DISPLAYSURFACE = pygame.display.set_mode((SCREEN_BLOCK_WIDTH*BLOCK_SIZE,
