@@ -29,10 +29,10 @@ class Block:
             nearby_blocks = block.get_nearby_blocks()
             for odor_type in Block.__odor_types:
                 source_block = max(nearby_blocks, key=lambda x: x.odors[odor_type])
-                block.odors_inc[odor_type] = (source_block.odors[odor_type] - block.odors[odor_type]) * rand(0.45, 0.55)
+                block.odors_inc[odor_type] = (source_block.odors[odor_type] - block.odors[odor_type]) * rand(0.48, 0.52)
         for block in blocks:
             for odor_type in Block.__odor_types:
-                block.odors[odor_type] *= rand(0.75, 0.85)
+                block.odors[odor_type] *= rand(0.78, 0.82)
                 block.odors[odor_type] += block.odors_inc[odor_type]
                 block.odors_inc[odor_type] = 0
                 block.odors[odor_type] *= 0 if block.odors[odor_type] < 1 else 1

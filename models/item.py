@@ -7,11 +7,12 @@ class Item:
     def __init__(self, block):
         self.block = None
         self.enter_block(block)
-        self.to_be_cleared = False
+        self.last_block = None
         Item.__items.add(self)
 
     def leave_block(self):
         self.block.lost_item()
+        self.last_block = self.block
         self.block = None
 
     def enter_block(self, block):
@@ -87,6 +88,8 @@ class Ant(Item):
                     self.enter_block(block)
                     return
             empty_nearby_blocks = self.block.get_empty_nearby_blocks()
-            target_nearby_block = max(empty_nearby_blocks, key=lambda x: x.odors[Food])
-            self.leave_block()
-            self.enter_block(target_nearby_block)
+            empty_nearby_blocks = list(block for block in empty_nearby_blocks if block is not self.last_block)
+            if len(empty_nearby_blocks):
+                target_nearby_block = max(empty_nearby_blocks, key=lambda x: x.odors[Food])
+                self.leave_block()
+                self.enter_block(target_nearby_block)
